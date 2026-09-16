@@ -52,6 +52,6 @@ public final class DbRegistry {
         }
         hc.setMaximumPoolSize(ds.getMaximumPoolSize());
         hc.setPoolName("light-api-db-" + name);
-        return new DbClient(new HikariDataSource(hc));
+        return new DbClient(new HikariDataSource(hc), profile);
     }
 }

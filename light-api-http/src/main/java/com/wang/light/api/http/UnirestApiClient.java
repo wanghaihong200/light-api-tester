@@ -51,7 +51,11 @@ public class UnirestApiClient extends ApiClient {
     protected ApiResponse doSend(ApiRequest request) {
         long start = System.currentTimeMillis();
         if (profile.isLogBody()) {
-            log.info("[light-api] >> {} {}", request.getMethod(), request.getUrl());
+            log.info("[light-api] >> {} {}{} headers={} body={}",
+                    request.getMethod(), request.getUrl(),
+                    request.getQuery().isEmpty() ? "" : " query=" + request.getQuery(),
+                    request.getHeaders(),
+                    requestBodyLog(request));
         }
         try {
             kong.unirest.HttpRequest<?> executable = buildExecutable(request);
@@ -62,6 +66,24 @@ public class UnirestApiClient extends ApiClient {
         } catch (UnirestException e) {
             throw new LightApiException("请求发送失败（网络/超时）: " + request + " | " + e.getMessage(), e);
         }
+    }
+
+    /** 请求侧日志体：与实际发送内容一致（String 原样、POJO/Map 转 JSON、fields 为表单字段） */
+    private String requestBodyLog(ApiRequest request) {
+        if (!request.getFields().isEmpty()) {
+            return String.valueOf(request.getFields());
+        }
+        Object body = request.getBody();
+        if (body == null) {
+            return "";
+        }
+        return truncate(body instanceof String ? (String) body : Json.toJson(body));
+    }
+
+    private String truncate(String text) {
+        return profile.getMaxLogBodyLength() >= 0 && text.length() > profile.getMaxLogBodyLength()
+                ? text.substring(0, profile.getMaxLogBodyLength()) + "...(截断)"
+                : text;
     }
 
     /**
@@ -129,9 +151,7 @@ public class UnirestApiClient extends ApiClient {
             String text = new String(body, java.nio.charset.StandardCharsets.UTF_8);
             log.info("[light-api] << {} ({}ms) status={} body={}",
                     request.getMethod() + " " + request.getUrl(), durationMs, resp.getStatus(),
-                    profile.getMaxLogBodyLength() >= 0 && text.length() > profile.getMaxLogBodyLength()
-                            ? text.substring(0, profile.getMaxLogBodyLength()) + "...(截断)"
-                            : text);
+                    truncate(text));
         }
         return new ApiResponse(request, resp.getStatus(), headers, body, durationMs);
     }

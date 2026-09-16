@@ -12,6 +12,7 @@ import com.wang.light.api.spi.SpiLoader;
 import com.wang.light.api.util.Json;
 import kong.unirest.HttpRequestWithBody;
 import kong.unirest.HttpResponse;
+import kong.unirest.MultipartBody;
 import kong.unirest.Unirest;
 import kong.unirest.UnirestException;
 import kong.unirest.UnirestInstance;
@@ -53,8 +54,8 @@ public class UnirestApiClient extends ApiClient {
             log.info("[light-api] >> {} {}", request.getMethod(), request.getUrl());
         }
         try {
-            kong.unirest.HttpRequest<?> req = buildRequest(request);
-            HttpResponse<byte[]> resp = req.asBytes();
+            kong.unirest.HttpRequest<?> executable = buildExecutable(request);
+            HttpResponse<byte[]> resp = executable.asBytes();
             return toApiResponse(request, resp, System.currentTimeMillis() - start);
         } catch (LightApiException e) {
             throw e;
@@ -63,30 +64,51 @@ public class UnirestApiClient extends ApiClient {
         }
     }
 
-    private kong.unirest.HttpRequest<?> buildRequest(ApiRequest request) {
-        kong.unirest.HttpRequest<?> req;
+    /**
+     * unirest 3.x 的 body()/field() 返回新节点并承载请求体状态，
+     * 必须在最终节点上执行请求——在 HttpRequestWithBody 容器上执行会丢 body（3.14.5 实测）。
+     */
+    private kong.unirest.HttpRequest<?> buildExecutable(ApiRequest request) {
+        kong.unirest.HttpRequest<?> req = createByMethod(request);
+        applyHeadersAndQuery(req, request);
+
+        if (!request.getFields().isEmpty()) {
+            HttpRequestWithBody wb = (HttpRequestWithBody) req;
+            MultipartBody mp = null;
+            for (Map.Entry<String, Object> f : request.getFields().entrySet()) {
+                String name = f.getKey();
+                Object v = f.getValue();
+                if (mp == null) {
+                    mp = v instanceof File ? wb.field(name, (File) v) : wb.field(name, String.valueOf(v));
+                } else {
+                    mp = v instanceof File ? mp.field(name, (File) v) : mp.field(name, String.valueOf(v));
+                }
+            }
+            return mp;
+        }
+        Object body = request.getBody();
+        if (body != null) {
+            HttpRequestWithBody wb = (HttpRequestWithBody) req;
+            return wb.body(body instanceof String ? (String) body : Json.toJson(body));
+        }
+        return req;
+    }
+
+    private kong.unirest.HttpRequest<?> createByMethod(ApiRequest request) {
         switch (request.getMethod()) {
             case GET:
-                req = unirest.get(request.getUrl());
-                break;
+                return unirest.get(request.getUrl());
             case POST:
-                req = unirest.post(request.getUrl());
-                break;
+                return unirest.post(request.getUrl());
             case PUT:
-                req = unirest.put(request.getUrl());
-                break;
+                return unirest.put(request.getUrl());
             case PATCH:
-                req = unirest.patch(request.getUrl());
-                break;
+                return unirest.patch(request.getUrl());
             case DELETE:
-                req = unirest.delete(request.getUrl());
-                break;
+                return unirest.delete(request.getUrl());
             default:
                 throw new LightApiException("不支持的 HTTP 方法: " + request.getMethod());
         }
-        applyHeadersAndQuery(req, request);
-        applyBodyOrFields(req, request);
-        return req;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -96,31 +118,6 @@ public class UnirestApiClient extends ApiClient {
         }
         for (Map.Entry<String, Object> q : request.getQuery().entrySet()) {
             req.queryString(q.getKey(), q.getValue());
-        }
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private void applyBodyOrFields(kong.unirest.HttpRequest req, ApiRequest request) {
-        if (!request.getFields().isEmpty()) {
-            HttpRequestWithBody mp = (HttpRequestWithBody) req;
-            for (Map.Entry<String, Object> f : request.getFields().entrySet()) {
-                if (f.getValue() instanceof File) {
-                    mp.field(f.getKey(), (File) f.getValue());
-                } else {
-                    mp.field(f.getKey(), String.valueOf(f.getValue()));
-                }
-            }
-            return;
-        }
-        Object body = request.getBody();
-        if (body == null) {
-            return;
-        }
-        HttpRequestWithBody wb = (HttpRequestWithBody) req;
-        if (body instanceof String) {
-            wb.body((String) body);
-        } else {
-            wb.body(Json.toJson(body));
         }
     }
 

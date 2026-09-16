@@ -1,0 +1,22 @@
+light-api:
+  env: mock
+  profiles:
+    mock:
+      base-url: http://localhost:18089
+      auth:
+        type: token
+        login-path: /api/login
+        username: demo
+        password: demo123
+        token-json-path: $.data.token
+        token-header: Authorization
+        token-prefix: "Bearer "
+      data-sources:
+        main:
+          url: jdbc:mysql://localhost:3306/demo
+          username: demo
+          password: demo
+  publish:
+    enabled: false
+  retry:
+    max-attempts: 1

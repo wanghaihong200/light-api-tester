@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="light-api-example" parallel="classes" thread-count="3">
+    <listeners>
+        <listener class-name="com.wang.light.example.DemoSuiteListener"/>
+    </listeners>
+    <test name="demo">
+        <classes>
+            <class name="com.wang.light.example.UserApiSpringTest"/>
+            <class name="com.wang.light.example.TokenAuthSpringTest"/>
+            <class name="com.wang.light.example.MultipartUploadTest"/>
+            <class name="com.wang.light.example.RetryShowcaseTest"/>
+            <class name="com.wang.light.example.DbCheckSpringTest"/>
+        </classes>
+    </test>
+</suite>
